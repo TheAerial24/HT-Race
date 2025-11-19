@@ -2,11 +2,11 @@
 let scene, camera, renderer, clock;
 let player, trackWall;
 
-// --- 2. Physics & Control Constants ---
+// --- 2. Physics & Control Constants (UPDATED FOR SPEED) ---
 const MASS = 10;
-const ACCELERATION = 20;  // m/s^2 
-const MAX_SPEED = 25;     // Increased speed for racing
-const DRAG = 0.98;        // Slightly less drag for momentum
+const ACCELERATION = 40;  // m/s^2 (Increased acceleration)
+const MAX_SPEED = 35;     // Increased Max Speed
+const DRAG = 0.98;        
 const ANGULAR_DRAG = 0.95; 
 const TURN_RATE = 0.05;   
 
@@ -56,8 +56,9 @@ function init() {
     // --- TRACK GEOMETRY (The Big Circle) ---
 
     // 1. Grid Helper (The track surface)
+    // We use a large, bright grid to serve as the ground texture within the track.
     const gridHelper = new THREE.GridHelper(
-        TRACK_RADIUS * 2 + 30, // Make the grid bigger than the track
+        TRACK_RADIUS * 2 + 30, 
         100, 
         0xCCCCCC, // Center line
         0xCCCCCC  // Grid line color
@@ -136,7 +137,7 @@ function updatePhysics(deltaTime) {
     // --- 4. Update Position ---
     player.position.add(velocity.clone().multiplyScalar(deltaTime));
     
-    // --- 5. Track Boundary Check (The New Collision Logic) ---
+    // --- 5. Track Boundary Check (Collision Logic) ---
     const position2D = new THREE.Vector2(player.position.x, player.position.z);
     const distanceToCenter = position2D.length();
     
