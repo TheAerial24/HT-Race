@@ -1,11 +1,15 @@
-// --- 1. Scene Setup ---
+// ==========================================================
+// File: main.js
+// Version: 3.0 (Final NASCAR Track, High Speed, No Pillars)
+// ==========================================================
+
 let scene, camera, renderer, clock;
 let player, trackWall;
 
-// --- 2. Physics & Control Constants (UPDATED FOR SPEED) ---
+// --- 2. Physics & Control Constants ---
 const MASS = 10;
-const ACCELERATION = 40;  // m/s^2 (Increased acceleration)
-const MAX_SPEED = 35;     // Increased Max Speed
+const ACCELERATION = 40;  // m/s^2 (High acceleration)
+const MAX_SPEED = 35;     // High Max Speed for racing
 const DRAG = 0.98;        
 const ANGULAR_DRAG = 0.95; 
 const TURN_RATE = 0.05;   
@@ -56,9 +60,9 @@ function init() {
     // --- TRACK GEOMETRY (The Big Circle) ---
 
     // 1. Grid Helper (The track surface)
-    // We use a large, bright grid to serve as the ground texture within the track.
+    // Used as the ground/track texture within the circle.
     const gridHelper = new THREE.GridHelper(
-        TRACK_RADIUS * 2 + 30, 
+        TRACK_RADIUS * 2 + 30, // Large size to cover track area
         100, 
         0xCCCCCC, // Center line
         0xCCCCCC  // Grid line color
@@ -70,7 +74,7 @@ function init() {
     const innerWallGeometry = new THREE.RingGeometry(TRACK_RADIUS, TRACK_RADIUS + 0.5, 64);
     const innerWallMaterial = new THREE.MeshPhongMaterial({ color: 0xFF0000, side: THREE.DoubleSide }); // Red
     const innerWall = new THREE.Mesh(innerWallGeometry, innerWallMaterial);
-    innerWall.rotation.x = Math.PI / 2; // Lay flat
+    innerWall.rotation.x = Math.PI / 2; 
     innerWall.position.y = WALL_HEIGHT / 2;
     scene.add(innerWall);
 
@@ -82,6 +86,8 @@ function init() {
     outerWall.rotation.x = Math.PI / 2;
     outerWall.position.y = WALL_HEIGHT / 2;
     scene.add(outerWall);
+
+    // *** REMOVED: The section that created random pillars is gone ***
 
     // --- Lighting ---
     const ambientLight = new THREE.AmbientLight(0x404040); 
