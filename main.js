@@ -1,20 +1,25 @@
 // --- 1. Scene Setup ---
 let scene, camera, renderer, clock;
-let player, ground;
+let player, trackWall;
 
 // --- 2. Physics & Control Constants ---
 const MASS = 10;
-const ACCELERATION = 20;  // m/s^2 (Forward/Backward thrust)
-const MAX_SPEED = 15;     // m/s
-const DRAG = 0.985;        // Velocity damping factor (linear momentum loss)
-const ANGULAR_DRAG = 0.95; // Rotational damping (turn momentum loss)
-const TURN_RATE = 0.05;   // Base turn speed
+const ACCELERATION = 20;  // m/s^2 
+const MAX_SPEED = 25;     // Increased speed for racing
+const DRAG = 0.98;        // Slightly less drag for momentum
+const ANGULAR_DRAG = 0.95; 
+const TURN_RATE = 0.05;   
+
+// Track constants
+const TRACK_RADIUS = 60; // Inner radius of the track area
+const TRACK_WIDTH = 10;  // Width of the track lane
+const WALL_HEIGHT = 2;   // Height of the track walls
 
 // Player State
 let velocity = new THREE.Vector3(0, 0, 0);
-let angularVelocity = 0; // Rotation speed around Y-axis
+let angularVelocity = 0; 
 
-// Input State (WASD or Arrow Keys)
+// Input State 
 const keys = {
     forward: false,
     backward: false,
@@ -26,7 +31,7 @@ const keys = {
 function init() {
     // Scene
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87ceeb); // Light blue sky
+    scene.background = new THREE.Color(0x000000); // Black background
 
     // Camera
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -36,52 +41,46 @@ function init() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // Clock for delta time calculation (essential for physics)
+    // Clock
     clock = new THREE.Clock();
 
     // --- Create Player (Car) ---
-    const geometry = new THREE.BoxGeometry(2, 1, 4); // Box is 2 wide, 1 high, 4 long
-    const material = new THREE.MeshPhongMaterial({ color: 0xc0392b }); // Red
+    const geometry = new THREE.BoxGeometry(2, 1, 4); 
+    const material = new THREE.MeshPhongMaterial({ color: 0xc0392b }); 
     player = new THREE.Mesh(geometry, material);
-    player.position.y = 0.5; // Sit on the ground
+    
+    // Start the player inside the track area
+    player.position.set(TRACK_RADIUS + TRACK_WIDTH / 2, 0.5, 0); 
     scene.add(player);
 
-    // --- Create Ground Plane ---
-    const groundGeometry = new THREE.PlaneGeometry(100, 100);
-    const groundMaterial = new THREE.MeshPhongMaterial({ color: 0x27ae60, side: THREE.DoubleSide }); // Green
-    ground = new THREE.Mesh(groundGeometry, groundMaterial);
-    ground.rotation.x = Math.PI / 2; // Rotate to lie flat on the XZ plane
-    scene.add(ground);
+    // --- TRACK GEOMETRY (The Big Circle) ---
 
-    // --- VISUAL CUES (Making Movement Visible) ---
-
-    // 1. Grid Helper (For Scale and Direction)
-    const size = 100; 
-    const divisions = 100; 
+    // 1. Grid Helper (The track surface)
     const gridHelper = new THREE.GridHelper(
-        size, 
-        divisions, 
-        0x0000FF, // Center line color
-        0xFFFFFF  // Grid line color (White for contrast)
+        TRACK_RADIUS * 2 + 30, // Make the grid bigger than the track
+        100, 
+        0xCCCCCC, // Center line
+        0xCCCCCC  // Grid line color
     );
-    gridHelper.position.y = 0.02; // Lift slightly above ground to prevent Z-fighting
+    gridHelper.position.y = 0.0; 
     scene.add(gridHelper);
 
-    // 2. Random Obstacles (For Parallax and Speed Reference)
-    const obstacleGeometry = new THREE.CylinderGeometry(0.5, 0.5, 3, 32); 
-    const obstacleMaterial = new THREE.MeshPhongMaterial({ color: 0x8b4513 }); 
+    // 2. Inner Wall (Red)
+    const innerWallGeometry = new THREE.RingGeometry(TRACK_RADIUS, TRACK_RADIUS + 0.5, 64);
+    const innerWallMaterial = new THREE.MeshPhongMaterial({ color: 0xFF0000, side: THREE.DoubleSide }); // Red
+    const innerWall = new THREE.Mesh(innerWallGeometry, innerWallMaterial);
+    innerWall.rotation.x = Math.PI / 2; // Lay flat
+    innerWall.position.y = WALL_HEIGHT / 2;
+    scene.add(innerWall);
 
-    for (let i = 0; i < 20; i++) {
-        const obstacle = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
-        
-        // Random position within the 100x100 ground area
-        obstacle.position.x = (Math.random() - 0.5) * 90;
-        obstacle.position.z = (Math.random() - 0.5) * 90;
-        obstacle.position.y = 1.5; // Half the pillar height
-        
-        scene.add(obstacle);
-    }
-    // --- END VISUAL CUES ---
+    // 3. Outer Wall (White)
+    const outerRadius = TRACK_RADIUS + TRACK_WIDTH;
+    const outerWallGeometry = new THREE.RingGeometry(outerRadius, outerRadius + 0.5, 64);
+    const outerWallMaterial = new THREE.MeshPhongMaterial({ color: 0xFFFFFF, side: THREE.DoubleSide }); // White
+    const outerWall = new THREE.Mesh(outerWallGeometry, outerWallMaterial);
+    outerWall.rotation.x = Math.PI / 2;
+    outerWall.position.y = WALL_HEIGHT / 2;
+    scene.add(outerWall);
 
     // --- Lighting ---
     const ambientLight = new THREE.AmbientLight(0x404040); 
@@ -115,8 +114,6 @@ function updatePhysics(deltaTime) {
 
     // --- 2. Acceleration (Force) ---
     let force = new THREE.Vector3(0, 0, 0);
-
-    // Calculate forward vector based on player's current rotation
     const forwardVector = new THREE.Vector3(0, 0, -1);
     forwardVector.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.rotation.y);
 
@@ -124,15 +121,14 @@ function updatePhysics(deltaTime) {
         force.add(forwardVector.clone().multiplyScalar(ACCELERATION));
     }
     if (keys.backward) {
-        force.add(forwardVector.clone().multiplyScalar(-ACCELERATION * 0.5)); // Reverse is slower
+        force.add(forwardVector.clone().multiplyScalar(-ACCELERATION * 0.5)); 
     }
 
     // --- 3. Update Velocity ---
     let accelerationVector = force.divideScalar(MASS);
     velocity.add(accelerationVector.multiplyScalar(deltaTime));
-    velocity.multiplyScalar(DRAG); // Apply drag
+    velocity.multiplyScalar(DRAG); 
 
-    // Clamp speed (maximum speed limit)
     if (velocity.length() > MAX_SPEED) {
         velocity.setLength(MAX_SPEED);
     }
@@ -140,25 +136,39 @@ function updatePhysics(deltaTime) {
     // --- 4. Update Position ---
     player.position.add(velocity.clone().multiplyScalar(deltaTime));
     
-    // --- 5. Camera Follow (Realistic third-person view) ---
+    // --- 5. Track Boundary Check (The New Collision Logic) ---
+    const position2D = new THREE.Vector2(player.position.x, player.position.z);
+    const distanceToCenter = position2D.length();
+    
+    // Inner Wall Collision
+    if (distanceToCenter < TRACK_RADIUS) {
+        // Stop velocity and push player back out to the boundary
+        velocity.multiplyScalar(0.01);
+        player.position.x = position2D.normalize().x * (TRACK_RADIUS + 0.1);
+        player.position.z = position2D.normalize().y * (TRACK_RADIUS + 0.1);
+    }
+    
+    // Outer Wall Collision
+    const maxRadius = TRACK_RADIUS + TRACK_WIDTH;
+    if (distanceToCenter > maxRadius) {
+        // Stop velocity and pull player back in
+        velocity.multiplyScalar(0.01); 
+        player.position.x = position2D.normalize().x * (maxRadius - 0.1);
+        player.position.z = position2D.normalize().y * (maxRadius - 0.1);
+    }
+    
+    // --- 6. Camera Follow ---
     const cameraOffset = new THREE.Vector3(0, 5, 10); 
     cameraOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.rotation.y); 
     
     camera.position.copy(player.position).add(cameraOffset);
     camera.lookAt(player.position); 
-
-    // Simple boundary check 
-    const boundary = 48;
-    if (Math.abs(player.position.x) > boundary || Math.abs(player.position.z) > boundary) {
-        // Stop motion if boundaries are hit
-        velocity.multiplyScalar(0.01); 
-    }
 }
 
 function animate() {
     requestAnimationFrame(animate);
 
-    const deltaTime = clock.getDelta(); // Time elapsed since last frame
+    const deltaTime = clock.getDelta(); 
     
     updatePhysics(deltaTime);
 
