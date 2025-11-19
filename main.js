@@ -6,7 +6,7 @@ let player, ground;
 const MASS = 10;
 const ACCELERATION = 20;  // m/s^2
 const MAX_SPEED = 15;     // m/s
-const DRAG = 0.99;        // Velocity damping factor (air resistance)
+const DRAG = 0.985;        // Velocity damping factor (air resistance)
 const ANGULAR_DRAG = 0.95; // Rotational damping
 const TURN_RATE = 0.05;   // Base turn speed
 
@@ -56,8 +56,32 @@ function init() {
     ground.rotation.x = Math.PI / 2; // Rotate to lie flat on the XZ plane
     scene.add(ground);
 
+    // --- VISUAL CUES (Making Movement Visible) ---
+
+    // 1. Grid Helper (For Scale and Direction)
+    const size = 100; 
+    const divisions = 100; 
+    const gridHelper = new THREE.GridHelper(size, divisions, 0x0000ff, 0x808080);
+    gridHelper.position.y = 0.01; 
+    scene.add(gridHelper);
+
+    // 2. Random Obstacles (For Parallax and Speed Reference)
+    const obstacleGeometry = new THREE.CylinderGeometry(0.5, 0.5, 3, 32); // Simple pillar
+    const obstacleMaterial = new THREE.MeshPhongMaterial({ color: 0x8b4513 }); // Brown
+
+    for (let i = 0; i < 20; i++) {
+        const obstacle = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+        
+        obstacle.position.x = (Math.random() - 0.5) * 90;
+        obstacle.position.z = (Math.random() - 0.5) * 90;
+        obstacle.position.y = 1.5; 
+        
+        scene.add(obstacle);
+    }
+    // --- END VISUAL CUES ---
+
     // --- Lighting ---
-    const ambientLight = new THREE.AmbientLight(0x404040); // Soft white light
+    const ambientLight = new THREE.AmbientLight(0x404040); 
     scene.add(ambientLight);
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
     directionalLight.position.set(5, 10, 7);
@@ -83,7 +107,7 @@ function updatePhysics(deltaTime) {
         angularVelocity -= TURN_RATE * deltaTime;
     }
 
-    // Apply angular drag
+    // Apply angular drag (damping)
     angularVelocity *= ANGULAR_DRAG;
     
     // Update player rotation (Y-axis)
@@ -128,7 +152,7 @@ function updatePhysics(deltaTime) {
     // Simple boundary check (for a fixed 100x100 ground)
     const boundary = 48;
     if (Math.abs(player.position.x) > boundary || Math.abs(player.position.z) > boundary) {
-        // Simple 'crash' effect: stop velocity
+        // Simple 'crash' effect: slow movement drastically
         velocity.multiplyScalar(0.01); 
     }
 }
