@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HTML-Racer: Pseudo-3D</title>
+    <style>
+        body {
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: sans-serif;
+            flex-direction: column;
+        }
+        canvas {
+            border: 3px solid #333;
+            background-color: #333;
+        }
+        #info {
+            color: #fff;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="info">Controls: Arrow Keys (Accelerate/Brake/Steer) | Goal: Survive the Curves!</div>
+
+    <script>
+        // --- 1. Setup Canvas and Context ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const SCREEN_WIDTH = canvas.width;
+        const SCREEN_HEIGHT = canvas.height;
+        const HALF_SCREEN_HEIGHT = SCREEN_HEIGHT / 2;
+
+        // --- 2. Constants and Physics ---
+        const FPS = 60;
+        const TARGET_FRAME_TIME = 1000 / FPS;
+
+        const ROAD_WIDTH = 0.5;   // Relative width of the road (0.0 to 1.0)
+        const CURVE_RATE = 0.05;  // Base curve multiplier
+        const TRACK_LENGTH = 20000; // Finish line approximation
+
+        const ACCELERATION = 0.005;
+        const BRAKE = 0.015;
+        const DECELERATION = 0.002;
+        const TURN_RATE = 0.03;
+        
+        // Track Data (Simple list defining the track's curvature)
+        // 0.0 is straight, positive is a right curve, negative is a left curve.
+        const TRACK_CURVES = [
+            0.0, 0.0, 0.1, 0.2, 0.2, 0.1, 0.0, -0.1, -0.2, -0.3, 
+            -0.3, -0.2, 0.0, 0.15, 0.3, 0.4, 0.2, 0.0, 0.0, 0.0
+        ].flatMap(c => Array(5).fill(c)); // Repeat each curve section for length
+
+        // --- 3. Game State Variables ---
+        let carXPos = 0.0;     
+        let speed = 0.0;       
+        let trackPosition = 0.0;
+        let gameActive = true;
+        let startTime = Date.now();
+        let raceTime = 0;
+        let bestTime = localStorage.getItem('bestTime') ? parseFloat(localStorage.getItem('bestTime')) : null;
+
+        // Input flags
+        const keys = {
+            up: false, down: false, left: false, right: false, r: false
+        };
+
+        // --- 4. Input Handlers ---
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowUp') keys.up = true;
+            if (e.key === 'ArrowDown') keys.down = true;
+            if (e.key === 'ArrowLeft') keys.left = true;
+            if (e.key === 'ArrowRight') keys.right = true;
+            if (e.key === 'r' || e.key === 'R') keys.r = true;
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowUp') keys.up = false;
+            if (e.key === 'ArrowDown') keys.down = false;
+            if (e.key === 'ArrowLeft') keys.left = false;
+            if (e.key === 'ArrowRight') keys.right = false;
+            if (e.key === 'r' || e.key === 'R') keys.r = false;
+        });
+
+        // --- 5. Helper Functions ---
+        function getCurve(pos) {
+            const segmentLength = 100;
+            const idx = Math.floor(pos / segmentLength) % TRACK_CURVES.length;
+            return TRACK_CURVES[idx] * CURVE_RATE;
+        }
+
+        function saveBestTime(time) {
+            localStorage.setItem('bestTime', time);
+        }
+
+        function restartGame() {
+            gameActive = true;
+            carXPos = 0.0;
+            speed = 0.0;
+            trackPosition = 0.0;
+            startTime = Date.now();
+            keys.r = false;
+        }
+
+        // --- 6. Game Logic Update ---
+        function updateGameLogic() {
+            if (gameActive) {
+                // 1. Update Speed
+                if (keys.up) {
+                    speed += ACCELERATION;
+                } else if (keys.down) {
+                    speed -= BRAKE;
+                } else {
+                    speed -= DECELERATION;
+                }
+                
+                speed = Math.max(0.0, Math.min(1.0, speed)); 
+
+                // 2. Lateral Movement / Turning
+                if (keys.left) {
+                    carXPos -= TURN_RATE; 
+                    trackPosition -= speed * 5; 
+                }
+                if (keys.right) {
+                    carXPos += TURN_RATE; 
+                    trackPosition += speed * 5; 
+                }
+                
+                // 3. Apply Current Curve (The difficulty!)
+                const currentCurve = getCurve(trackPosition);
+                carXPos -= currentCurve * speed * 2; // Curve pull proportional to speed!
+                
+                // 4. Update Progress
+                trackPosition += speed * 20; 
+
+                // 5. Collision Check (Off-road)
+                if (Math.abs(carXPos) > 1.2) {
+                    gameActive = false; 
+                }
+
+                // 6. Check Finish Line
+                if (trackPosition >= TRACK_LENGTH) {
+                    gameActive = false;
+                    const finalTime = (Date.now() - startTime) / 1000;
+                    if (bestTime === null || finalTime < bestTime) {
+                        bestTime = finalTime;
+                        saveBestTime(bestTime);
+                    }
+                }
+                
+                // 7. Update Timer
+                raceTime = (Date.now() - startTime) / 1000;
+
+            } else if (keys.r) {
+                restartGame();
+            }
+        }
+
+        // --- 7. Rendering Functions ---
+        function drawPseudo3DRoad() {
+            // Draw Sky (Blue)
+            ctx.fillStyle = '#00aaff';
+            ctx.fillRect(0, 0, SCREEN_WIDTH, HALF_SCREEN_HEIGHT);
+            
+            // Draw Far Ground/Mountains (Dark Green)
+            ctx.fillStyle = '#006400';
+            ctx.fillRect(0, HALF_SCREEN_HEIGHT, SCREEN_WIDTH, HALF_SCREEN_HEIGHT);
+
+            let offset = 0.0;
+            
+            // Loop through screen rows from near (bottom) to far (horizon)
+            for (let y = SCREEN_HEIGHT - 1; y > HALF_SCREEN_HEIGHT; y -= 2) { 
+                
+                // 1. Perspective Scale Factor
+                const scale = 1.0 / (SCREEN_HEIGHT - y); 
+                
+                // 2. Road Projection Width
+                const roadW = SCREEN_WIDTH * scale * ROAD_WIDTH;
+                
+                // 3. Horizontal Position of Road Center
+                const roadP = SCREEN_WIDTH / 2.0 + offset;
+                
+                // 4. Draw the Road Segment
+                const roadLeft = roadP - roadW;
+                const roadRight = roadP + roadW;
+                
+                // Draw road strip (Gray)
+                ctx.fillStyle = '#555';
+                ctx.fillRect(roadLeft, y, roadW * 2, 2);
+                
+                // Draw center stripe (Yellow)
+                ctx.fillStyle = '#ffff00';
+                const stripeWidth = roadW * 0.05;
+                ctx.fillRect(roadP - stripeWidth / 2, y, stripeWidth, 2);
+
+                // 5. Apply Curve/Offset for the NEXT (further away) segment
+                const currentCurve = getCurve(trackPosition + (SCREEN_HEIGHT - y) * 10); 
+                offset -= currentCurve * 20; 
+            }
+        }
+
+        function drawCar() {
+            // Car is fixed near the bottom, centered horizontally based on carXPos
+            const carScreenX = SCREEN_WIDTH / 2 + carXPos * 100; 
+            const carY = SCREEN_HEIGHT - 50;
+            
+            // Draw Car body (Red)
+            ctx.fillStyle = '#c00';
+            ctx.fillRect(carScreenX - 30, carY - 20, 60, 40);
+            
+            // Draw Cockpit (White)
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(carScreenX - 10, carY - 10, 20, 10);
+        }
+
+        function drawUI() {
+            ctx.fillStyle = '#fff';
+            ctx.font = '24px Arial';
+            
+            // Speed
+            ctx.fillText(`Speed: ${speed.toFixed(2)}`, 10, 30);
+            
+            // Time
+            ctx.textAlign = 'right';
+            ctx.fillText(`Time: ${raceTime.toFixed(2)}s`, SCREEN_WIDTH - 10, 30);
+
+            // Best Time (using local storage for savable progress)
+            if (bestTime !== null) {
+                ctx.font = '18px Arial';
+                ctx.fillText(`Best: ${bestTime.toFixed(2)}s`, SCREEN_WIDTH - 10, 55);
+            }
+            ctx.textAlign = 'left';
+
+            // Progress Bar
+            const progress = Math.min(1.0, trackPosition / TRACK_LENGTH);
+            const barWidth = progress * (SCREEN_WIDTH - 200);
+            ctx.fillStyle = '#333';
+            ctx.fillRect(100, 570, SCREEN_WIDTH - 200, 15);
+            ctx.fillStyle = '#0f0';
+            ctx.fillRect(100, 570, barWidth, 15);
+            ctx.strokeStyle = '#fff';
+            ctx.strokeRect(100, 570, SCREEN_WIDTH - 200, 15);
+        }
+
+        function drawGameOverScreen() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Semi-transparent overlay
+            ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+            
+            ctx.fillStyle = '#ff0000';
+            ctx.font = '48px Arial';
+            ctx.textAlign = 'center';
+
+            let message;
+            if (trackPosition >= TRACK_LENGTH) {
+                message = "RACE COMPLETED!";
+            } else {
+                message = "CRASHED!";
+            }
+            
+            ctx.fillText(message, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 30);
+            
+            ctx.fillStyle = '#fff';
+            ctx.font = '30px Arial';
+            
+            const result = trackPosition >= TRACK_LENGTH 
+                ? `Final Time: ${raceTime.toFixed(2)}s`
+                : `Progress: ${((trackPosition / TRACK_LENGTH) * 100).toFixed(0)}%`;
+            
+            ctx.fillText(result, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 20);
+            
+            ctx.font = '24px Arial';
+            ctx.fillText("Press R to Restart", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 70);
+            ctx.textAlign = 'left';
+        }
+
+        // --- 8. Main Game Loop ---
+        function gameLoop() {
+            updateGameLogic();
+            
+            // 1. Clear Screen
+            ctx.clearRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+            // 2. Draw Elements
+            drawPseudo3DRoad();
+            drawCar();
+            drawUI();
+            
+            if (!gameActive) {
+                drawGameOverScreen();
+            }
+
+            // Request next frame
+            setTimeout(() => {
+                requestAnimationFrame(gameLoop);
+            }, TARGET_FRAME_TIME);
+        }
+
+        // Start the game!
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
