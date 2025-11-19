@@ -4,17 +4,17 @@ let player, ground;
 
 // --- 2. Physics & Control Constants ---
 const MASS = 10;
-const ACCELERATION = 20;  // m/s^2
+const ACCELERATION = 20;  // m/s^2 (Forward/Backward thrust)
 const MAX_SPEED = 15;     // m/s
-const DRAG = 0.985;        // Velocity damping factor (air resistance)
-const ANGULAR_DRAG = 0.95; // Rotational damping
+const DRAG = 0.985;        // Velocity damping factor (linear momentum loss)
+const ANGULAR_DRAG = 0.95; // Rotational damping (turn momentum loss)
 const TURN_RATE = 0.05;   // Base turn speed
 
 // Player State
 let velocity = new THREE.Vector3(0, 0, 0);
 let angularVelocity = 0; // Rotation speed around Y-axis
 
-// Input State
+// Input State (WASD or Arrow Keys)
 const keys = {
     forward: false,
     backward: false,
@@ -30,23 +30,20 @@ function init() {
 
     // Camera
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    // Position camera slightly behind and above the player
-    camera.position.set(0, 5, 10);
-    camera.lookAt(0, 0, 0);
 
     // Renderer
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // Clock for delta time calculation
+    // Clock for delta time calculation (essential for physics)
     clock = new THREE.Clock();
 
     // --- Create Player (Car) ---
     const geometry = new THREE.BoxGeometry(2, 1, 4); // Box is 2 wide, 1 high, 4 long
     const material = new THREE.MeshPhongMaterial({ color: 0xc0392b }); // Red
     player = new THREE.Mesh(geometry, material);
-    player.position.y = 0.5; // Half the height to sit on the ground
+    player.position.y = 0.5; // Sit on the ground
     scene.add(player);
 
     // --- Create Ground Plane ---
@@ -61,20 +58,26 @@ function init() {
     // 1. Grid Helper (For Scale and Direction)
     const size = 100; 
     const divisions = 100; 
-    const gridHelper = new THREE.GridHelper(size, divisions, 0x0000ff, 0x808080);
-    gridHelper.position.y = 0.01; 
+    const gridHelper = new THREE.GridHelper(
+        size, 
+        divisions, 
+        0x0000FF, // Center line color
+        0xFFFFFF  // Grid line color (White for contrast)
+    );
+    gridHelper.position.y = 0.02; // Lift slightly above ground to prevent Z-fighting
     scene.add(gridHelper);
 
     // 2. Random Obstacles (For Parallax and Speed Reference)
-    const obstacleGeometry = new THREE.CylinderGeometry(0.5, 0.5, 3, 32); // Simple pillar
-    const obstacleMaterial = new THREE.MeshPhongMaterial({ color: 0x8b4513 }); // Brown
+    const obstacleGeometry = new THREE.CylinderGeometry(0.5, 0.5, 3, 32); 
+    const obstacleMaterial = new THREE.MeshPhongMaterial({ color: 0x8b4513 }); 
 
     for (let i = 0; i < 20; i++) {
         const obstacle = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
         
+        // Random position within the 100x100 ground area
         obstacle.position.x = (Math.random() - 0.5) * 90;
         obstacle.position.z = (Math.random() - 0.5) * 90;
-        obstacle.position.y = 1.5; 
+        obstacle.position.y = 1.5; // Half the pillar height
         
         scene.add(obstacle);
     }
@@ -107,10 +110,7 @@ function updatePhysics(deltaTime) {
         angularVelocity -= TURN_RATE * deltaTime;
     }
 
-    // Apply angular drag (damping)
     angularVelocity *= ANGULAR_DRAG;
-    
-    // Update player rotation (Y-axis)
     player.rotation.y += angularVelocity;
 
     // --- 2. Acceleration (Force) ---
@@ -127,14 +127,12 @@ function updatePhysics(deltaTime) {
         force.add(forwardVector.clone().multiplyScalar(-ACCELERATION * 0.5)); // Reverse is slower
     }
 
-    // --- 3. Update Velocity (F = ma, so a = F/m) ---
+    // --- 3. Update Velocity ---
     let accelerationVector = force.divideScalar(MASS);
     velocity.add(accelerationVector.multiplyScalar(deltaTime));
+    velocity.multiplyScalar(DRAG); // Apply drag
 
-    // Apply linear drag (Damping)
-    velocity.multiplyScalar(DRAG);
-
-    // Clamp speed (realistic maximum speed)
+    // Clamp speed (maximum speed limit)
     if (velocity.length() > MAX_SPEED) {
         velocity.setLength(MAX_SPEED);
     }
@@ -142,17 +140,17 @@ function updatePhysics(deltaTime) {
     // --- 4. Update Position ---
     player.position.add(velocity.clone().multiplyScalar(deltaTime));
     
-    // --- 5. Camera Follow (Behind the player) ---
-    const cameraOffset = new THREE.Vector3(0, 5, 10); // Offset: 5m up, 10m back
-    cameraOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.rotation.y); // Rotate offset with player
+    // --- 5. Camera Follow (Realistic third-person view) ---
+    const cameraOffset = new THREE.Vector3(0, 5, 10); 
+    cameraOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.rotation.y); 
     
     camera.position.copy(player.position).add(cameraOffset);
-    camera.lookAt(player.position); // Always look at the player
+    camera.lookAt(player.position); 
 
-    // Simple boundary check (for a fixed 100x100 ground)
+    // Simple boundary check 
     const boundary = 48;
     if (Math.abs(player.position.x) > boundary || Math.abs(player.position.z) > boundary) {
-        // Simple 'crash' effect: slow movement drastically
+        // Stop motion if boundaries are hit
         velocity.multiplyScalar(0.01); 
     }
 }
